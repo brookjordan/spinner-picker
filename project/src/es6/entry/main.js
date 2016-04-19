@@ -1,4 +1,5 @@
 import people from '../data/people.js';
+
 const nameCards = [];
 const desiredNameCount = getDesiredCount();
 const spinSpeed = 10;
@@ -7,20 +8,22 @@ const friction  = 0.01;
 const nameCount       = Math.min(desiredNameCount, Math.round(people.length / 2));
 const spinnerMaxSpeed = Math.floor(people.length/2) * 100;
 const spinnerElt      = document.createElement('div');
-const accuracy        = 10;
 const cursorSpeeds    = [];
 const body = document.body;
+let spinnerRequest;
 let spinnerSpeed      = 0;
+let spinnerStartSpeed = 0;
 let frict             = friction;
 let prevClientY;
 let clientY;
 let lastY;
-
-let spanFor;
+let spinnerPos        = 0;
+let spinnerStartPos   = 0;
+let frame;
 
 body.appendChild(spinnerElt);
 buildNames();
-keepSpinning();
+checkCursorSpeed();
 
 body.addEventListener('mousedown',     enableTrackMouse, false);
 body.addEventListener('touchstart',    enableTrackMouse, false);
@@ -53,127 +56,131 @@ function disableTrackMouse(e) {
 function trackMouse(e) {
   e.preventDefault();
   
-  clientY = getY(e);
-  shiftNames(px2spd(clientY - lastY));
-  lastY = clientY;
+  clientY      = getY(e);
+  spinnerPos  += px2spd(clientY - lastY);
+  lastY        = clientY;
+  shiftNames();
 }
 
 function mouseSpeed(e) {
   e.preventDefault();
+
   clientY = getY(e);
 }
 
 function startSpinnerSpinning(e) {
-  spanFor = minPos();
-  spinnerSpeed = Math.floor(px2spd(averageValue(...cursorSpeeds)) * accuracy);
-  const a = willLandAt({
-    initialPosition: minPos(),
-    initialVelocity: spinnerSpeed,
+  e.preventDefault();
+
+  frame = 1;
+  spinnerStartPos   = spinnerPos;
+  spinnerStartSpeed = spinnerSpeed = px2spd(averageValue(...cursorSpeeds));
+
+  const landingSpot = willLandAt({
+    initialPosition: spinnerStartPos,
+    initialVelocity: spinnerStartSpeed,
     friction:        friction,
   });
   const shouldLandAt = spinnerSpeed > 0 ?
-    Math.ceil(a/(100*accuracy)) * (100*accuracy) : Math.floor(a/(100*accuracy)) * (100*accuracy);
+    Math.ceil(landingSpot) : Math.floor(landingSpot);
   frict = frictionRequiredToLandAt({
-    initialPosition: minPos(),
-    initialVelocity: spinnerSpeed,
+    initialPosition: spinnerStartPos,
+    initialVelocity: spinnerStartSpeed,
     finalLanding:    shouldLandAt,
   });
-  e.preventDefault();
+
   disableTrackMouse(e);
+  startSpinning();
 }
 
 
 
 function keepSpinning() {
-  addMousePositionToStack();
-
   if (spinnerSpeed) {
     simulateSpin();
+    spinnerRequest = requestAnimationFrame(keepSpinning);
   }
-  requestAnimationFrame(keepSpinning);
 }
 
-function shiftName(nameCard, by) {
-  nameCard.pos += by;
-  return nameCard.pos;
+function startSpinning() {
+  cancelAnimationFrame(spinnerRequest);
+  keepSpinning();
 }
 
-function shiftNames(by) {
-  nameCards.forEach(nameCard => {
-    shiftName(nameCard, by);
-  });
+function checkCursorSpeed() {
+  addMousePositionToStack();
+  requestAnimationFrame(checkCursorSpeed);
+}
+
+function shiftNames() {
   killNames();
   buildNames();
   renderNames();
 }
 
-function simulateSpin(by) {
-  spinnerSpeed *= (1 - frict);
-  
-  //Click into place
-  if (Math.abs(spinnerSpeed) <= 1.5) {
-    let pos = Math.abs(minPos()) % 100;
-    if (pos < 1) {
-      spinnerSpeed = 0;
-      shiftNames(pos);
-      return;
-    } else if (pos > 99) {
-      spinnerSpeed = 0;
-      shiftNames(-(100 - pos));
-      return;
-    }
-  }
-  
-  //Don't let it stop it it hasn't clicked!
-  if (Math.abs(spinnerSpeed) < 0.5) {
-    spinnerSpeed *= 2;
-  }
-
+function simulateSpin() {
   if (nameCards.length) {
-    shiftNames(spinnerSpeed / accuracy);
+    spinnerPos = willBeAt(frame, {
+      initialPosition: spinnerStartPos,
+      initialVelocity: spinnerStartSpeed,
+      friction:        frict,
+    });
+    shiftNames();
+    frame ++;
   }
 }
 
 function addName(_under) {
   const under = _under || false;
   
-  const nameElt = document.createElement('div');
-  const nameTextElt = document.createElement('p');
-  const height = 100 / nameCount;
-  const text = people.splice(Math.floor(Math.random()*people.length), 1)[0];
-  const position = nameCards.length === 0 ?
+  const nameElt      = document.createElement('div');
+  const nameTextElt  = document.createElement('p');
+  const height       = 100 / nameCount;
+  const text         = people.splice(Math.floor(Math.random()*people.length), 1)[0];
+  const index        = nameCards.length === 0 ?
           0 :
             under ?
-          maxPos() + 100 : minPos() - 100;
+          maxIndex() + 1 : minIndex() - 1;
 
-  nameElt.className = 'name';
-  nameElt.style.height = `${height}vh`;
-  nameElt.style.lineHeight = `${height}vh`;
-  nameElt.style.backgroundImage = text ? `url(${text.image})` || 'none' : 'none';
+  nameElt.className              = 'name';
+  nameElt.style.height           = `${height}vh`;
+  nameElt.style.lineHeight       = `${height}vh`;
+  nameElt.style.backgroundImage  = text ? `url(${text.image})` || 'none' : 'none';
 
-  nameTextElt.innerHTML = text ? text.name || '' : '';
-  nameTextElt.className = 'name__text';
-  nameTextElt.style.fontSize = `${Math.min(6, 40 / nameCount)}vmin`;
+  nameTextElt.innerHTML       = text ? text.name || '' : '';
+  nameTextElt.className       = 'name__text';
+  nameTextElt.style.fontSize  = `${Math.min(6, 40 / nameCount)}vmin`;
 
   nameElt.appendChild(nameTextElt);
   spinnerElt.appendChild(nameElt);
 
   nameCards.push({
-    elt: nameElt,
-    pos: position,
-    txt: text,
+    text,
+    index,
+    elt:   nameElt,
   });
 }
 
 function maxPos() {
   if (nameCards.length) {
-    return Math.max(...nameCards.map(nameCard => nameCard.pos));
+    return Math.max(...nameCards.map(nameCard => cardPosition(nameCard)));
+  }
+}
+
+function maxIndex() {
+  if (nameCards.length) {
+    return Math.max(...nameCards.map(nameCard => nameCard.index));
   }
 }
 
 function minPos() {
   if (nameCards.length) {
-    return Math.min(...nameCards.map(nameCard => nameCard.pos));
+    return Math.min(...nameCards.map(nameCard => cardPosition(nameCard)));
+  }
+}
+
+function minIndex() {
+  if (nameCards.length) {
+    return Math.min(...nameCards.map(nameCard => nameCard.index));
   }
 }
 
@@ -184,34 +191,46 @@ function buildNames() {
   while(minPos() > 0) {
     addName(false);
   }
-  while(maxPos() < (nameCount - 1) * 100) {
+
+  while(maxPos() < (nameCount - 1) / nameCount) {
     addName(true);
   }
   renderNames();
 }
 
-function killName(nameCardIndex) {
-  const nameCard = nameCards.splice(nameCardIndex, 1)[0];
-  nameCard.elt.parentNode.removeChild(nameCard.elt);
-  if (typeof nameCard.txt !== 'undefined') {
-    people.push(nameCard.txt);
+function killName(nameCard) {
+  const nameCardIndex = nameCards.indexOf(nameCard);
+  nameCards.splice(nameCardIndex, 1)[0];
+
+  if (nameCard.elt.parentNode) {
+    nameCard.elt.parentNode.removeChild(nameCard.elt);
+  }
+  
+  if (typeof nameCard.text !== 'undefined') {
+    people.push(nameCard.text);
   }
 }
 
 function killNames() {
-  if(minPos() < -100 || maxPos() > nameCount * 100) {
+  if(minPos() < -1 / nameCount || maxPos() > (1 / nameCount) * (nameCount - 1)) {
     nameCards.forEach((nameCard, index) => {
-      if(nameCard.pos < -100 || nameCard.pos > nameCount * 100) {
-        if (nameCard.elt.parentNode) {
-          killName(index);
-        }
+      const cardPos = cardPosition(nameCard);
+      if(cardPos <= -1 / nameCount) {
+        killName(nameCard);
+      }
+      if(cardPos >= 1) {
+        killName(nameCard);
       }
     });
   }
 }
 
+function cardPosition(nameCard) {
+  return (spinnerPos + nameCard.index) / nameCount;
+}
+
 function renderName(nameCard) {
-  nameCard.elt.style.transform = `translateY(${nameCard.pos}%)`;
+  nameCard.elt.style.transform = `translateY(${(spinnerPos + nameCard.index) * 100}%)`;
 }
 
 function renderNames() {
@@ -237,7 +256,7 @@ function averageValue(...args) {
 }
 
 function px2spd(px) {
-  return (px / innerHeight) * 100 * nameCount;
+  return ((px / innerHeight) * nameCount);
 }
 
 function getY(e) {
@@ -248,6 +267,22 @@ function getY(e) {
     y = e.clientY;
   }
   return y;
+}
+
+function willBeAt(frame, options) {
+  var o = options || {};
+  var initialPosition = setWithFallback(o.initialPosition, 0);
+  var initialVelocity = setWithFallback(o.initialVelocity, 10);
+  var friction        = setWithFallback(o.friction,        0.01);
+  
+  console.log(frame);
+  console.log(initialPosition);
+  console.log(initialVelocity);
+  console.log(friction);
+  console.log(initialPosition + ((1 - friction) / 2) * Math.pow(frame - 1, 2) + initialVelocity * frame);
+  console.log('----');
+
+  return initialPosition + ((1 - friction) / 2) * Math.pow(frame - 1, 2) + initialVelocity * frame;
 }
 
 function willLandAt(options) {
