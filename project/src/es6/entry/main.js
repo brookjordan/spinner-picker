@@ -3,7 +3,7 @@ import people from '../data/people.js';
 const nameCards = [];
 const desiredNameCount = getDesiredCount();
 const spinSpeed = 10;
-const friction  = 0.01;
+const friction  = 0.03;
 
 const nameCount       = Math.min(desiredNameCount, Math.round(people.length / 2));
 const spinnerMaxSpeed = Math.floor(people.length/2) * 100;
@@ -269,20 +269,8 @@ function getY(e) {
   return y;
 }
 
-function willBeAt(frame, options) {
-  var o = options || {};
-  var initialPosition = setWithFallback(o.initialPosition, 0);
-  var initialVelocity = setWithFallback(o.initialVelocity, 10);
-  var friction        = setWithFallback(o.friction,        0.01);
-  
-  console.log(frame);
-  console.log(initialPosition);
-  console.log(initialVelocity);
-  console.log(friction);
-  console.log(initialPosition + ((1 - friction) / 2) * Math.pow(frame - 1, 2) + initialVelocity * frame);
-  console.log('----');
-
-  return initialPosition + ((1 - friction) / 2) * Math.pow(frame - 1, 2) + initialVelocity * frame;
+function willBeAt(frame, { initialPosition = 0, initialVelocity = 10, friction = 0.01 } = {}) {
+  return initialPosition + initialVelocity * ( (1 - Math.pow(1 - friction, frame)) / friction );
 }
 
 function willLandAt(options) {
