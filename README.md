@@ -9,7 +9,7 @@ Cool project for choosing geckos to make plans with
 
 run:
 ```
-npm install --global browserify node-sass postcss autoprefixer watch watchify
+npm install --global browserify node-sass postcss-cli autoprefixer watch watchify
 npm install
 ```
 
